@@ -1,9 +1,10 @@
 import pygame
+import config.constants as constants
 import ui.pygame.constants as ui
 import ui.pygame.theme as theme
 import ui.pygame.widgets as widgets
 from ui.pygame import art
-from ui.pygame.animation import Animator, creature_radius
+from ui.pygame.layout import Layout
 
 GRASS_COUNT = 110
 MAX_PONDS = 4
@@ -13,10 +14,12 @@ HEADER_SPACE = 74
 
 
 class MapView:
-    def __init__(self, screen, fonts: theme.Fonts, world):
+    def __init__(self, screen, fonts: theme.Fonts, world, layout: Layout, animator):
         self.screen = screen
         self.fonts = fonts
-        self.rects = self._layout(world)
+        self.animator = animator
+        self.rects = self._layout(world, layout)
+        self.scale = self._scale()
         self.art = {}
         self.grass = {}
         for region in world.regions.values():
@@ -24,17 +27,21 @@ class MapView:
             background = art.region_background(region.biome.id, rect.size, region.id)
             self.art[region.id] = art.rounded_mask(background, 16)
             self.grass[region.id] = art.grass_points(region.id, rect.width, rect.height, GRASS_COUNT)
-        self.animator = Animator(self._slots(), theme.TEXT, theme.GOLD)
+        self.animator.set_layout(self._slots(), self.scale)
 
-    def _layout(self, world) -> dict:
+    def _scale(self) -> float:
+        rect = next(iter(self.rects.values()))
+        return max(1.0, min(1.8, rect.width / 300, rect.height / 366))
+
+    def _layout(self, world, layout: Layout) -> dict:
         cols = max(r.get_x() for r in world.regions.values()) + 1
         rows = max(r.get_y() for r in world.regions.values()) + 1
-        area_h = ui.SCREEN_Y - ui.TOPBAR_HEIGHT
-        width = ui.MAP_WIDTH // cols
-        height = area_h // rows
+        area = layout.map_rect
+        width = area.width // cols
+        height = area.height // rows
         gap = ui.REGION_GAP
         return {
-            region.id: pygame.Rect(region.get_x() * width + gap, ui.TOPBAR_HEIGHT + region.get_y() * height + gap,
+            region.id: pygame.Rect(area.left + region.get_x() * width + gap, area.top + region.get_y() * height + gap,
                                    width - gap * 2, height - gap * 2)
             for region in world.regions.values()
         }
@@ -42,11 +49,12 @@ class MapView:
     def _slots(self) -> dict:
         slots = {}
         for region_id, rect in self.rects.items():
-            cols = max(1, (rect.width - 20) // SLOT_STEP_X)
-            rows = max(1, (rect.height - HEADER_SPACE - 20) // SLOT_STEP_Y)
-            offset = (rect.width - cols * SLOT_STEP_X) / 2 + SLOT_STEP_X / 2
+            step_x, step_y = SLOT_STEP_X * self.scale, SLOT_STEP_Y * self.scale
+            cols = max(1, int((rect.width - 20) // step_x))
+            rows = max(1, int((rect.height - HEADER_SPACE - 20) // step_y))
+            offset = (rect.width - cols * step_x) / 2 + step_x / 2
             slots[region_id] = [
-                (rect.left + offset + c * SLOT_STEP_X, rect.top + HEADER_SPACE + r * SLOT_STEP_Y + SLOT_STEP_Y / 2)
+                (rect.left + offset + c * step_x, rect.top + HEADER_SPACE + r * step_y + step_y / 2)
                 for r in range(rows) for c in range(cols)
             ]
         return slots
@@ -104,13 +112,16 @@ class MapView:
         widgets.text(self.screen, self.fonts.bold, f"{name} · {region.id}", (pill.left + 12, pill.top + 5), theme.TEXT)
         art.water_drop(self.screen, (pill.left + 17, pill.top + 33), (110, 190, 245))
         widgets.text(self.screen, self.fonts.small, f"{region.biome.humidity:.0f}", (pill.left + 26, pill.top + 25), theme.TEXT)
-        widgets.text(self.screen, self.fonts.small, f"растения {int(region.plants_stock)}", (pill.left + 64, pill.top + 25), (160, 230, 150))
+        satiety = world.plant_eaters_satiety(region)
+        hungry = satiety is not None and satiety < constants.HUNGER_THRESHOLD
+        widgets.text(self.screen, self.fonts.small, f"растения {int(region.plants_stock)}", (pill.left + 64, pill.top + 25),
+                     theme.RED if hungry else (160, 230, 150))
         load = min(1.0, world.region_load(region))
         widgets.bar(self.screen, (pill.right - 96, pill.top + 29, 84, 6), load, 1.0, theme.GOLD if load > 0.9 else theme.ACCENT)
         widgets.text(self.screen, self.fonts.small, "заселённость", (pill.right - 12, pill.top + 7), theme.MUTED, "topright")
 
     def _creature(self, sprite, selected: bool, t: float) -> None:
-        radius = max(4.0, sprite.radius)
+        radius = max(4.0, sprite.radius * self.scale)
         size = int(radius * 5)
         layer = pygame.Surface((size, size), pygame.SRCALPHA)
         phase = sprite.pop_id * 1.7
@@ -131,7 +142,9 @@ class MapView:
             widgets.alpha_circle(self.screen, theme.GOLD, (sprite.x, sprite.y), int(radius + 6), 200, 2)
         if selected:
             widgets.alpha_circle(self.screen, theme.TEXT, (sprite.x, sprite.y), int(radius + 11), 230, 2)
-        widgets.text(self.screen, self.fonts.small, str(sprite.size), (sprite.x, sprite.y - radius - 6), theme.TEXT, "midbottom")
+        hungry = sprite.satiety < constants.HUNGER_THRESHOLD
+        widgets.text(self.screen, self.fonts.small, str(sprite.size), (sprite.x, sprite.y - radius - 6),
+                     theme.RED if hungry else theme.TEXT, "midbottom")
         widgets.text(self.screen, self.fonts.small, f"#{sprite.species_id}", (sprite.x, sprite.y + radius + 5), (235, 235, 245), "midtop")
 
     def _effect(self, effect) -> None:

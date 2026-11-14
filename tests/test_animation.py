@@ -10,7 +10,7 @@ def make_world(populations):
 
 def make_population(pop_id, species_id=1, region_id=1, size=50):
     return SimpleNamespace(
-        id=pop_id, size=size, influenced=False,
+        id=pop_id, size=size, influenced=False, satiety=1.0,
         region=SimpleNamespace(id=region_id),
         species=SimpleNamespace(id=species_id, type_id=1),
         genome=SimpleNamespace(temperature=50, power=50),

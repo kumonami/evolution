@@ -27,12 +27,12 @@ class TreeView:
     Прокрутка колесом мыши по вертикали, масштаб строк кнопками на верхней панели.
     """
 
-    def __init__(self, screen, fonts: theme.Fonts):
+    def __init__(self, screen, fonts: theme.Fonts, layout, scroll: float = 0.0, zoom: float = 1.0):
         self.screen = screen
         self.fonts = fonts
-        self.area = pygame.Rect(0, ui.TOPBAR_HEIGHT, ui.MAP_WIDTH, ui.SCREEN_Y - ui.TOPBAR_HEIGHT)
-        self.scroll = 0.0
-        self.zoom = 1.0
+        self.area = layout.map_rect
+        self.scroll = scroll
+        self.zoom = zoom
         self.hits: list = []
         self._content = 0.0
 
@@ -97,7 +97,7 @@ class TreeView:
         widgets.text(self.screen, self.fonts.small, "тики", (self.area.right - 10, self.area.top + 8), theme.MUTED, "topright")
 
     def _color(self, row):
-        base = theme.ORIGIN_COLORS.get(row.species.origin, theme.GREEN)
+        base = theme.TYPE_COLORS.get(row.species.type_id, theme.TEXT)
         return base if not row.species.is_extinct else theme.mix(base, theme.BACKGROUND, 0.55)
 
     def _branch(self, start, end, row) -> None:
@@ -119,12 +119,15 @@ class TreeView:
         hovered = hover is not None and hit.collidepoint(hover)
         if selected or hovered:
             pygame.draw.rect(glow, (*theme.ACCENT, 38 if selected else 22), hit.inflate(24, 0), border_radius=8)
+        influenced = row.species.origin == "influenced"
         if alive:
             pygame.draw.line(glow, (*color, 60), (x0, y), (x1, y), 11)
+        if influenced:
+            gold = theme.GOLD if alive else theme.mix(theme.GOLD, theme.BACKGROUND, 0.5)
+            pygame.draw.line(self.screen, gold, (x0, y), (x1, y), 8 if alive else 6)
         pygame.draw.line(self.screen, color, (x0, y), (x1, y), 4 if alive else 3)
-        dot = theme.TYPE_COLORS.get(row.species.type_id, theme.TEXT)
-        pygame.draw.circle(self.screen, theme.BACKGROUND, (x0, y), 7)
-        pygame.draw.circle(self.screen, dot, (x0, y), 5)
+        pygame.draw.circle(self.screen, theme.GOLD if influenced else theme.BACKGROUND, (x0, y), 8)
+        pygame.draw.circle(self.screen, color, (x0, y), 5)
         if selected:
             pygame.draw.circle(self.screen, theme.TEXT, (x0, y), 8, 2)
         if not alive:
@@ -134,7 +137,8 @@ class TreeView:
     def _label(self, row, x1: float, y: float) -> None:
         alive = not row.species.is_extinct
         value = f"#{row.species.id}  {row.size}" if alive else f"#{row.species.id}"
-        widgets.text(self.screen, self.fonts.small, value, (x1 + 10, y), theme.TEXT if alive else theme.MUTED, "midleft")
+        color = theme.TYPE_COLORS.get(row.species.type_id, theme.TEXT) if alive else theme.MUTED
+        widgets.text(self.screen, self.fonts.small, value, (x1 + 10, y), color, "midleft")
 
     def _scrollbar(self, step: float, count: int) -> None:
         visible = self.area.height - AXIS_HEIGHT
@@ -148,18 +152,17 @@ class TreeView:
         widgets.rounded(self.screen, theme.MUTED, (track.left, thumb_y, track.width, thumb_h), 2)
 
     def _legend(self) -> None:
-        pill = pygame.Rect(self.area.left + 12, self.area.bottom - 36, 560, 26)
+        pill = pygame.Rect(self.area.left + 12, self.area.bottom - 36, 600, 26)
         layer = pygame.Surface(pill.size, pygame.SRCALPHA)
-        pygame.draw.rect(layer, (12, 14, 20, 200), layer.get_rect(), border_radius=13)
+        pygame.draw.rect(layer, (12, 14, 20, 210), layer.get_rect(), border_radius=13)
         self.screen.blit(layer, pill.topleft)
         x = pill.left + 14
-        items = [(1, "травоядное"), (2, "всеядное"), (3, "хищник")]
-        for type_id, label in items:
-            pygame.draw.circle(self.screen, theme.TYPE_COLORS[type_id], (x, pill.centery), 5)
-            x = widgets.text(self.screen, self.fonts.small, label, (x + 10, pill.centery), theme.TEXT, "midleft").right + 16
-        for name, label in (("natural", "естественный"), ("influenced", "влияние игрока")):
-            pygame.draw.line(self.screen, theme.ORIGIN_COLORS[name], (x, pill.centery), (x + 20, pill.centery), 4)
-            x = widgets.text(self.screen, self.fonts.small, label, (x + 26, pill.centery), theme.TEXT, "midleft").right + 16
+        for type_id, label in ((1, "травоядное"), (2, "всеядное"), (3, "хищник")):
+            pygame.draw.line(self.screen, theme.TYPE_COLORS[type_id], (x, pill.centery), (x + 22, pill.centery), 4)
+            x = widgets.text(self.screen, self.fonts.small, label, (x + 28, pill.centery), theme.TEXT, "midleft").right + 16
+        pygame.draw.line(self.screen, theme.GOLD, (x, pill.centery), (x + 22, pill.centery), 8)
+        pygame.draw.line(self.screen, theme.MUTED, (x, pill.centery), (x + 22, pill.centery), 3)
+        x = widgets.text(self.screen, self.fonts.small, "влияние игрока", (x + 28, pill.centery), theme.TEXT, "midleft").right + 16
         pygame.draw.line(self.screen, theme.RED, (x - 4, pill.centery - 4), (x + 4, pill.centery + 4), 2)
         pygame.draw.line(self.screen, theme.RED, (x - 4, pill.centery + 4), (x + 4, pill.centery - 4), 2)
         widgets.text(self.screen, self.fonts.small, "вымер", (x + 10, pill.centery), theme.TEXT, "midleft")

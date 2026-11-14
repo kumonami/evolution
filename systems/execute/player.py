@@ -2,7 +2,7 @@ import config.constants as constants
 from core.genome import GENE_LABELS, GENES, clamp_gene
 from core.world import World
 from domain.commands.commands import PlayerCommand
-from domain.intents import AddPlants, AdjustWater, NudgeGene, ResizeRegion
+from domain.intents import AddPlants, AdjustWater, NudgeGene, NudgeSpecies, ResizeRegion
 from events.event import EventType
 from systems.base import commands_of
 
@@ -25,6 +25,8 @@ class PlayerExecuteSystem:
                 self._resize(world, intent)
             elif isinstance(intent, NudgeGene):
                 self._nudge(world, intent)
+            elif isinstance(intent, NudgeSpecies):
+                self._nudge_species(world, intent)
 
     def _touch_region(self, world: World, region) -> None:
         for population in world.populations_in(region):
@@ -68,3 +70,21 @@ class PlayerExecuteSystem:
         population.influenced = True
         world.logger.log(world.tick, EventType.PLAYER,
                          f"Признак «{GENE_LABELS[intent.gene]}» популяции {population.id} сдвинут на {intent.delta:+.0f}")
+
+    def _nudge_species(self, world: World, intent: NudgeSpecies) -> None:
+        """
+        Сдвигает признак у всех популяций вида сразу. Родоначальный геном
+        вида не меняется, поэтому сдвиг накапливает расстояние до него
+        и со временем может привести к новому виду.
+        """
+        if intent.gene not in GENES:
+            return
+        targets = world.species_populations(intent.species_id)
+        for population in targets:
+            value = getattr(population.genome, intent.gene) + intent.delta
+            setattr(population.genome, intent.gene, clamp_gene(value))
+            population.influenced = True
+        if targets:
+            world.logger.log(world.tick, EventType.PLAYER,
+                             f"Признак «{GENE_LABELS[intent.gene]}» всего вида {intent.species_id} "
+                             f"({len(targets)} поп.) сдвинут на {intent.delta:+.0f}")

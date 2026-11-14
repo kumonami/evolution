@@ -31,6 +31,7 @@ class Sprite:
     influenced: bool
     temperature: float
     power: float
+    satiety: float = 1.0
     alpha: float = 1.0
     dying: bool = False
     age: float = 0.0
@@ -67,6 +68,7 @@ class Animator:
         self.ghosts: list[Sprite] = []
         self.effects: list[Effect] = []
         self.known_species: set = set()
+        self.scale = 1.0
         self._initial = True
 
     def sync(self, world) -> None:
@@ -103,12 +105,25 @@ class Animator:
             effect.age += dt
         self.effects = [e for e in self.effects if e.age < e.life]
 
+    def set_layout(self, slots: dict, scale: float) -> None:
+        """
+        Подстраивает слоты и масштаб существ под новый размер окна.
+        Существа мгновенно встают на свои слоты в новой раскладке.
+        """
+        self.slots = slots
+        self.scale = scale
+        for sprite in self.sprites.values():
+            options = slots[sprite.region_id]
+            sprite.slot = sprite.slot if sprite.slot < len(options) else sprite.pop_id % len(options)
+            sprite.tx, sprite.ty = options[sprite.slot]
+            sprite.x, sprite.y = sprite.tx, sprite.ty
+
     def float_text(self, x: float, y: float, value: str, color: tuple) -> None:
         self.effects.append(Effect("text", x, y, color, TEXT_LIFE, text=value))
 
     def sprite_at(self, pos) -> Optional[Sprite]:
         for sprite in reversed(list(self.sprites.values())):
-            reach = sprite.radius + 6
+            reach = sprite.radius * self.scale + 6
             if (pos[0] - sprite.x) ** 2 + (pos[1] - sprite.y) ** 2 <= reach ** 2:
                 return sprite
         return None
@@ -131,6 +146,7 @@ class Animator:
 
     def _refresh(self, sprite: Sprite, population) -> None:
         sprite.size = population.size
+        sprite.satiety = population.satiety
         sprite.target_radius = creature_radius(population.size)
         sprite.influenced = population.influenced
         sprite.temperature = population.genome.temperature

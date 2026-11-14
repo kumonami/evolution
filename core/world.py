@@ -91,8 +91,36 @@ class World:
     def living_populations(self) -> list[Population]:
         return [p for p in self.populations.values() if p.is_alive]
 
+    def species_populations(self, species_id: int) -> list[Population]:
+        return [p for p in self.populations.values() if p.is_alive and p.species.id == species_id]
+
+    def species_genome(self, species_id: int) -> Optional[Genome]:
+        """
+        Средний геном вида по его живым популяциям с весом по численности.
+        """
+        populations = self.species_populations(species_id)
+        if not populations:
+            return None
+        genome = populations[0].genome
+        weight = populations[0].size
+        for population in populations[1:]:
+            genome = Genome.blend(genome, weight, population.genome, population.size)
+            weight += population.size
+        return genome
+
     def populations_in(self, region: Region) -> list[Population]:
         return [p for p in self.populations.values() if p.is_alive and p.region.id == region.id]
+
+    def plant_eaters_satiety(self, region: Region) -> Optional[float]:
+        """
+        Средняя сытость растительноядных популяций региона с весом по численности
+        или None, если растениями в регионе никто не питается.
+        """
+        eaters = [p for p in self.populations_in(region) if p.plant_need > 0]
+        total = sum(p.size for p in eaters)
+        if total <= 0:
+            return None
+        return sum(p.satiety * p.size for p in eaters) / total
 
     def region_load(self, region: Region) -> float:
         total = sum(p.size for p in self.populations_in(region))

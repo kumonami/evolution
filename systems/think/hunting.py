@@ -7,8 +7,10 @@ from events.world import WorldEvent, WorldEventType, HuntPayload
 class HuntingThinkSystem:
     """
     Охота хищников и всеядных на другие популяции региона.
-    Удачность определяется атакой хищника против защиты жертвы: чем она выше,
-    тем большая доля популяции-жертвы доступна для охоты за тик.
+    Число попыток за тик пропорционально размеру хищной популяции и голоду,
+    удачность определяется атакой хищника против защиты жертвы. Сильный
+    хищник убивает заметно больше, а съедает лишь сколько ему нужно:
+    избыток убитых остаётся зря, так что сила видна и на численности жертв.
     Численность жертв уменьшается в локальном пуле по ходу расчёта,
     чтобы несколько хищников не съели одну и ту же добычу дважды.
     """
@@ -27,7 +29,10 @@ class HuntingThinkSystem:
                     world.events.append(event)
 
     def _hunt(self, world: World, predator: Population, local: list, pool: dict):
-        need = predator.meat_need
+        attempts = (
+            predator.size * constants.HUNT_RATE * predator.meat_share
+            * max(0.3, 1.5 - predator.satiety)
+        )
         gained = 0.0
         kills = {}
         preys = [
@@ -38,27 +43,27 @@ class HuntingThinkSystem:
         ]
         world.rng.shuffle(preys)
         for prey in preys:
-            if need <= 0:
+            if attempts <= 0:
                 break
-            value = prey.genome.prey_value
-            catch = self._catch_chance(predator, prey)
-            reachable = pool[prey.id] * constants.MAX_HUNT_FRACTION * catch * 2
-            killed = min(world.round_random(need / value), int(reachable))
+            catch = self._catch_chance(predator, prey) * pool[prey.id] / (pool[prey.id] + constants.HUNT_REFUGE)
+            catch = max(0.02, catch)
+            reachable = int(pool[prey.id] * constants.MAX_HUNT_FRACTION * catch * 2)
+            killed = min(world.round_random(attempts * catch), reachable)
             if killed <= 0:
                 continue
             pool[prey.id] -= killed
             kills[prey.id] = killed
-            gained += killed * value
-            need -= killed * value
+            gained += killed * prey.genome.prey_value
+            attempts -= killed / catch
         if not kills:
             return None
         return WorldEvent[HuntPayload](
             type=WorldEventType.HUNT,
             population_id=predator.id,
-            payload=HuntPayload(food_amount=gained, kills=kills),
+            payload=HuntPayload(food_amount=min(gained, predator.meat_need), kills=kills),
         )
 
     @staticmethod
     def _catch_chance(predator: Population, prey: Population) -> float:
         diff = predator.genome.attack - prey.genome.defense
-        return max(0.05, min(0.95, 0.5 + diff / 200))
+        return max(0.05, min(0.95, 0.5 + diff / constants.HUNT_CATCH_SPREAD))

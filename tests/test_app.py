@@ -78,6 +78,59 @@ class AppButtonsTest(unittest.TestCase):
         self.assertEqual(population.genome.fly, 10)
         self.assertTrue(population.influenced)
 
+    def test_resize_rebuilds_map_for_new_window(self):
+        self.app.resize(1920, 1080)
+        self.assertEqual(self.app.layout.width, 1920)
+        widest = max(r.width for r in self.app.map_view.rects.values())
+        self.assertGreater(widest, 400)
+        self.assertGreater(self.app.animator.scale, 1.0)
+        self.app.draw()
+
+    def test_small_window_is_clamped_to_minimum(self):
+        self.app.resize(300, 200)
+        self.assertEqual(self.app.screen.get_size(), (1100, 640))
+
+    def test_window_resize_event_rebuilds_layout_once(self):
+        self.app.handle(pygame.event.Event(pygame.VIDEORESIZE, w=1500, h=900, size=(1500, 900)))
+        self.assertEqual(self.app.windowed_size, (1500, 900))
+
+    def test_panel_toggle_gives_map_the_full_width(self):
+        before = self.app.layout.map_rect.width
+        self.app.toggle_panel()
+        self.app.draw()
+        self.assertEqual(self.app.layout.map_rect.width, self.app.layout.width)
+        self.assertGreater(self.app.layout.map_rect.width, before)
+
+    def test_fullscreen_toggle_round_trip(self):
+        self.app.toggle_fullscreen()
+        self.assertTrue(self.app.fullscreen)
+        self.app.draw()
+        self.app.toggle_fullscreen()
+        self.assertFalse(self.app.fullscreen)
+        self.assertEqual(self.app.layout.width, self.app.screen.get_width())
+
+    def test_species_scope_nudges_every_population_of_species(self):
+        sprite = next(iter(self.app.animator.sprites.values()))
+        self.click(sprite.x, sprite.y)
+        population = self.world.get_population(sprite.pop_id)
+        clone = self.world.add_population(population.species, population.genome.copy(), population.region, 30)
+        clone.genome.fly = 0
+        population.genome.fly = 0
+        self.app.set_scope("species")
+        self.app.nudge("fly", 10)
+        self.assertEqual(clone.genome.fly, 10)
+        self.assertEqual(population.genome.fly, 10)
+
+    def test_tree_species_card_nudges_whole_species(self):
+        species_id = next(iter(self.world.species))
+        populations = self.world.species_populations(species_id)
+        self.app.selected_species = species_id
+        self.app.toggle_view()
+        self.app.draw()
+        before = [p.genome.dig for p in populations]
+        self.app.nudge_species("dig", 10)
+        self.assertTrue(all(p.genome.dig == min(100, b + 10) for p, b in zip(populations, before)))
+
     def test_clicking_map_does_not_trigger_keyboard_actions(self):
         self.app.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE, mod=0))
         self.assertTrue(self.app.paused)

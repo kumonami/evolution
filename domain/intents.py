@@ -20,6 +20,13 @@ class ResizeRegion:
 
 
 @dataclass
+class NudgeSpecies:
+    species_id: int
+    gene: str
+    delta: float
+
+
+@dataclass
 class NudgeGene:
     population_id: int
     gene: str

@@ -37,11 +37,27 @@ class WorldGenerator:
             types = [SpeciesType.HERBIVORE]
             if world.rng.random() < constants.SECOND_SPECIES_CHANCE:
                 types.append(world.rng.choice([SpeciesType.OMNIVORE, SpeciesType.CARNIVORE]))
+            herbivore_size = None
             for species_type in types:
                 genome = GenomeGenerator.generate(world.rng, region.biome, species_type)
                 species = world.register_species(species_type.id, genome)
-                population = PopulationGenerator.generate(world, species, genome, region)
+                size = WorldGenerator._start_size(world, species_type, herbivore_size)
+                population = PopulationGenerator.generate(world, species, genome, region, size)
+                if species_type is SpeciesType.HERBIVORE:
+                    herbivore_size = population.size
                 world.logger.log(
                     world.tick, EventType.WORLD,
                     f"В регион {region} добавлена популяция {population.id} вида {species.id} ({species_type.species_name})",
                 )
+
+    @staticmethod
+    def _start_size(world: World, species_type: SpeciesType, herbivore_size):
+        """
+        Хищники и всеядные стартуют долей от численности травоядных региона,
+        иначе в первые же тики они выедают жертв и вымирают.
+        """
+        if herbivore_size is None or species_type is SpeciesType.HERBIVORE:
+            return None
+        low, high = (constants.CARNIVORE_START_SHARE if species_type is SpeciesType.CARNIVORE
+                     else constants.OMNIVORE_START_SHARE)
+        return max(constants.MIN_START_SIZE, int(herbivore_size * world.rng.uniform(low, high)))

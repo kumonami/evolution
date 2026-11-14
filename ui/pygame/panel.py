@@ -9,20 +9,21 @@ from ui.pygame.series import feed_lines, species_series, total_series
 PADDING = 12
 GAP = 10
 GENE_ROW = 21
+GRAPH_HEIGHT = 92
 
 
 class SidePanel:
     """
     Правая панель. В режиме карты показывает выбранный регион и популяцию
-    с кнопками вмешательства, график численности и ленту событий.
-    В режиме дерева показывает карточку выбранного вида.
+    с кнопками вмешательства (на одну популяцию или на весь вид), график
+    численности и ленту событий. В режиме дерева показывает карточку вида.
     """
 
-    def __init__(self, screen, fonts: theme.Fonts, ui_kit: widgets.Ui):
+    def __init__(self, screen, fonts: theme.Fonts, ui_kit: widgets.Ui, layout):
         self.screen = screen
         self.fonts = fonts
         self.kit = ui_kit
-        self.rect = pygame.Rect(ui.MAP_WIDTH, ui.TOPBAR_HEIGHT, ui.PANEL_WIDTH, ui.SCREEN_Y - ui.TOPBAR_HEIGHT)
+        self.rect = layout.panel_rect
 
     def draw_map(self, world, region_id, population_id, actions) -> None:
         self._background()
@@ -34,13 +35,13 @@ class SidePanel:
         else:
             y = self._region_card(world, region, y, actions)
         if population:
-            y = self._population_card(population, y, actions)
+            y = self._population_card(world, population, y, actions)
         title, series, color = self._series(world, population)
-        widgets.sparkline(self.screen, self.fonts, self._slot(y, 100), series, color, title)
-        y += 100 + GAP
+        widgets.sparkline(self.screen, self.fonts, self._slot(y, GRAPH_HEIGHT), series, color, title)
+        y += GRAPH_HEIGHT + GAP
         self._log(world, y)
 
-    def draw_species(self, world, species) -> None:
+    def draw_species(self, world, species, actions) -> None:
         self._background()
         y = self.rect.top + PADDING
         if not species:
@@ -48,33 +49,41 @@ class SidePanel:
             widgets.rounded(self.screen, theme.CARD, card, 10, theme.CARD_BORDER)
             widgets.text(self.screen, self.fonts.body, "Выберите вид на дереве", card.center, theme.MUTED, "center")
             return
-        card = self._slot(y, 40 + 21 * 4 + len(GENES) * GENE_ROW + 16)
+        populations = world.species_populations(species.id)
+        genome = world.species_genome(species.id)
+        alive = not species.is_extinct
+        card = self._slot(y, 40 + 21 * 5 + 22 + len(GENES) * GENE_ROW + 16)
         widgets.rounded(self.screen, theme.CARD, card, 10, theme.CARD_BORDER)
         x = card.left + PADDING
         top = card.top + 10
         widgets.text(self.screen, self.fonts.title, f"Вид #{species.id}", (x, top))
         self._chip(species, card.right - PADDING, top + 2)
         top += 32
-        alive = not species.is_extinct
+        influenced = species.origin == "influenced"
         rows = [
-            ("Происхождение", ui.ORIGIN_NAMES.get(species.origin, species.origin), theme.ORIGIN_COLORS.get(species.origin, theme.TEXT)),
+            ("Происхождение", ui.ORIGIN_NAMES.get(species.origin, species.origin), theme.GOLD if influenced else theme.GREEN),
             ("Родитель", f"#{species.parent_id}" if species.parent_id else "нет", theme.TEXT),
             ("Появился", f"тик {species.born_tick}", theme.TEXT),
             ("Статус", "жив" if alive else f"вымер на тике {species.extinct_tick}", theme.GREEN if alive else theme.RED),
+            ("Популяции", f"{len(populations)} · особей {sum(p.size for p in populations)}" if alive else "нет", theme.TEXT),
         ]
         for label, value, color in rows:
             widgets.text(self.screen, self.fonts.small, label, (x, top), theme.MUTED)
             widgets.text(self.screen, self.fonts.small, value, (card.right - PADDING, top), color, "topright")
             top += 21
-        top += 8
-        genes = species.anchor.as_dict()
+        top += 4
+        title = "Средний геном · влияет на весь вид" if alive else "Родоначальный геном"
+        widgets.text(self.screen, self.fonts.small, title, (x, top), theme.MUTED)
+        top += 22
+        genes = (genome or species.anchor).as_dict()
+        handler = actions.nudge_species if alive and genome else None
         for gene in GENES:
-            self._gene_row(card, top, gene, genes[gene], None)
+            self._gene_row(card, top, gene, genes[gene], handler)
             top += GENE_ROW
         y += card.height + GAP
         series = species_series(world.history, species.id)
-        widgets.sparkline(self.screen, self.fonts, self._slot(y, 110), series, theme.ORIGIN_COLORS.get(species.origin, theme.GREEN),
-                          f"Численность вида #{species.id}")
+        color = theme.TYPE_COLORS.get(species.type_id, theme.GREEN)
+        widgets.sparkline(self.screen, self.fonts, self._slot(y, 110), series, color, f"Численность вида #{species.id}")
 
     def _background(self) -> None:
         pygame.draw.rect(self.screen, theme.PANEL, self.rect)
@@ -110,29 +119,37 @@ class SidePanel:
             right -= width + 6
 
     def _region_card(self, world, region, y: int, actions) -> int:
-        card = self._slot(y, 194)
+        card = self._slot(y, 196)
         widgets.rounded(self.screen, theme.CARD, card, 10, theme.CARD_BORDER)
         biome = region.biome
         x, top = card.left + PADDING, card.top + 10
         widgets.text(self.screen, self.fonts.title, f"{ui.BIOME_NAMES.get(biome.id, 'Регион')} · регион {region.id}", (x, top))
         top += 28
         widgets.text(self.screen, self.fonts.small,
-                     f"температура {biome.temperature:.0f}   прирост {region.plants_growth_rate:.0f}/тик", (x, top), theme.MUTED)
-        top += 20
-        widgets.text(self.screen, self.fonts.small,
-                     f"растения {int(region.plants_stock)} из {int(region.plants_limit)}   нагрузка {world.region_load(region):.2f}",
+                     f"растения {int(region.plants_stock)} из {int(region.plants_limit)} · прирост {region.plants_growth_rate:.0f}",
                      (x, top), theme.MUTED)
-        top += 26
+        top += 19
+        widgets.text(self.screen, self.fonts.small,
+                     f"температура {biome.temperature:.0f} · нагрузка {world.region_load(region):.2f}", (x, top), theme.MUTED)
+        top += 19
+        satiety = world.plant_eaters_satiety(region)
+        if satiety is None:
+            note, color = "растительноядных нет", theme.MUTED
+        else:
+            hungry = satiety < constants.HUNGER_THRESHOLD
+            note, color = f"сытость травоядных {satiety:.2f}" + (" · голод" if hungry else ""), theme.RED if hungry else theme.GREEN
+        widgets.text(self.screen, self.fonts.small, note, (x, top), color)
+        top += 24
         step = constants.PLAYER_WATER_STEP
         self._control(card, top, "Влажность", f"{biome.humidity:.0f}", [
             ("minus", None, lambda: actions.water(-step), biome.humidity > 0),
             ("plus", None, lambda: actions.water(step), biome.humidity < 100),
         ])
-        top += 34
+        top += 32
         self._control(card, top, "Растения", f"{int(region.plants_stock)}", [
             (None, f"+{int(constants.PLAYER_PLANTS_AMOUNT)}", actions.plants, True),
         ])
-        top += 34
+        top += 32
         cap = constants.PLAYER_CAPACITY_STEP
         self._control(card, top, "Вместимость", f"{region.capacity}", [
             ("minus", None, lambda: actions.capacity(-cap), region.capacity > constants.MIN_REGION_CAPACITY),
@@ -140,39 +157,50 @@ class SidePanel:
         ])
         return y + card.height + GAP
 
-    def _population_card(self, population, y: int, actions) -> int:
-        height = 80 + len(GENES) * GENE_ROW + 10
-        card = self._slot(y, height)
+    def _population_card(self, world, population, y: int, actions) -> int:
+        card = self._slot(y, 108 + len(GENES) * GENE_ROW + 8)
         widgets.rounded(self.screen, theme.CARD, card, 10, theme.CARD_BORDER)
         x, top = card.left + PADDING, card.top + 10
         species = population.species
         widgets.text(self.screen, self.fonts.title, f"Популяция {population.id} · вид #{species.id}", (x, top))
         self._chip(species, card.right - PADDING, top + 26)
-        widgets.text(self.screen, self.fonts.small, f"особей {population.size}   сытость {population.satiety:.2f}", (x, top + 28), theme.MUTED)
+        widgets.text(self.screen, self.fonts.small, f"особей {population.size} · сытость {population.satiety:.2f}", (x, top + 28), theme.MUTED)
         top += 50
         fitness = population.genome.fitness(population.region.biome)
         origin = "влияние игрока" if population.influenced else "естественная"
         color = theme.GOLD if population.influenced else theme.GREEN
-        widgets.text(self.screen, self.fonts.small, f"пригодность {fitness:.2f}   стресс {population.stress:.2f}", (x, top), theme.MUTED)
+        widgets.text(self.screen, self.fonts.small, f"пригодность {fitness:.2f} · стресс {population.stress:.2f}", (x, top), theme.MUTED)
         widgets.text(self.screen, self.fonts.small, origin, (card.right - PADDING, top), color, "topright")
-        top += 26
+        top += 24
+        self._scope_toggle(world, population, card, top, actions)
+        top += 32
         genes = population.genome.as_dict()
         for gene in GENES:
-            self._gene_row(card, top, gene, genes[gene], actions)
+            self._gene_row(card, top, gene, genes[gene], actions.nudge)
             top += GENE_ROW
         return y + card.height + GAP
 
-    def _gene_row(self, card, y: int, gene: str, value: float, actions) -> None:
+    def _scope_toggle(self, world, population, card, y: int, actions) -> None:
+        count = len(world.species_populations(population.species.id))
+        half = (card.width - PADDING * 2 - 6) // 2
+        left = pygame.Rect(card.left + PADDING, y, half, 26)
+        right = pygame.Rect(left.right + 6, y, half, 26)
+        self.kit.button(self.screen, left, label="Эта популяция", font=self.fonts.small,
+                        on_click=lambda: actions.set_scope("population"), active=actions.scope == "population")
+        self.kit.button(self.screen, right, label=f"Весь вид · {count} поп.", font=self.fonts.small,
+                        on_click=lambda: actions.set_scope("species"), active=actions.scope == "species")
+
+    def _gene_row(self, card, y: int, gene: str, value: float, handler) -> None:
         x = card.left + PADDING
         widgets.text(self.screen, self.fonts.small, ui.GENE_NAMES.get(gene, gene), (x, y + 2), theme.TEXT)
         widgets.bar(self.screen, (x + 100, y + 7, 112, 8), value, 100, theme.ACCENT if gene in GENES[:5] else theme.CYAN)
         widgets.text(self.screen, self.fonts.small, f"{value:.0f}", (x + 222, y + 2), theme.MUTED)
-        if not actions:
+        if not handler:
             return
         step = constants.PLAYER_GENE_STEP
         right = card.right - PADDING
-        self.kit.button(self.screen, (right - 22, y, 22, 19), icon="plus", on_click=lambda: actions.nudge(gene, step), enabled=value < 100)
-        self.kit.button(self.screen, (right - 48, y, 22, 19), icon="minus", on_click=lambda: actions.nudge(gene, -step), enabled=value > 0)
+        self.kit.button(self.screen, (right - 22, y, 22, 19), icon="plus", on_click=lambda: handler(gene, step), enabled=value < 100)
+        self.kit.button(self.screen, (right - 48, y, 22, 19), icon="minus", on_click=lambda: handler(gene, -step), enabled=value > 0)
 
     def _series(self, world, population):
         if population:

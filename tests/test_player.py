@@ -61,3 +61,42 @@ class PlayerInterventionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SpeciesNudgeTest(unittest.TestCase):
+    def setUp(self):
+        from domain.intents import NudgeSpecies
+        self.NudgeSpecies = NudgeSpecies
+        self.world = WorldGenerator.generate(seed=1)
+        self.simulation = Simulation(self.world)
+        source = next(iter(self.world.populations.values()))
+        region = next(r for r in self.world.regions.values() if r.id != source.region.id)
+        self.species = source.species
+        self.first = source
+        self.second = self.world.add_population(source.species, source.genome.copy(), region, 30)
+        self.other = next(p for p in self.world.populations.values() if p.species.id != source.species.id)
+
+    def test_all_populations_of_species_change_and_others_do_not(self):
+        self.first.genome.power = 40
+        self.second.genome.power = 60
+        other_power = self.other.genome.power
+        self.world.submit(self.NudgeSpecies(self.species.id, "power", 10))
+        self.simulation.apply_interventions()
+        self.assertEqual(self.first.genome.power, 50)
+        self.assertEqual(self.second.genome.power, 70)
+        self.assertEqual(self.other.genome.power, other_power)
+        self.assertTrue(self.first.influenced and self.second.influenced)
+        self.assertFalse(self.other.influenced)
+
+    def test_species_anchor_is_not_changed(self):
+        anchor = self.species.anchor.power
+        self.world.submit(self.NudgeSpecies(self.species.id, "power", 10))
+        self.simulation.apply_interventions()
+        self.assertEqual(self.species.anchor.power, anchor)
+
+    def test_species_genome_is_size_weighted(self):
+        self.first.size = 100
+        self.second.size = 100
+        self.first.genome.speed = 20
+        self.second.genome.speed = 60
+        self.assertAlmostEqual(self.world.species_genome(self.species.id).speed, 40)
