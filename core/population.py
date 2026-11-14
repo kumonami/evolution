@@ -25,6 +25,7 @@ class Population:
     food_received: float = 0.0
     is_alive: bool = True
     born_tick: int = 0
+    influenced: bool = False
 
     @property
     def total_need(self) -> float:

@@ -15,5 +15,6 @@ class MergeExecuteSystem:
             total = survivor.size + absorbed.size
             survivor.satiety = (survivor.satiety * survivor.size + absorbed.satiety * absorbed.size) / total
             survivor.stress = max(survivor.stress, absorbed.stress)
+            survivor.influenced = survivor.influenced or absorbed.influenced
             survivor.size = total
             world.remove_population(absorbed)

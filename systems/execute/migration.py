@@ -23,7 +23,8 @@ class MigrationExecuteSystem:
         population.size -= size
         population.cooldown = constants.MIGRATION_COOLDOWN
         colony = world.add_population(population.species, population.genome.copy(), target, size,
-                                      satiety=population.satiety, stress=population.stress)
+                                      satiety=population.satiety, stress=population.stress,
+                                      influenced=population.influenced)
         colony.cooldown = constants.MIGRATION_COOLDOWN
         world.logger.log(
             world.tick, EventType.MIGRATION,

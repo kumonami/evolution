@@ -22,4 +22,5 @@ class MutationExecuteSystem:
             genome = population.genome.mutated(world.rng, cmd.strength, population.region.biome)
             population.size -= size
             world.add_population(population.species, genome, population.region, size,
-                                 satiety=population.satiety, stress=population.stress)
+                                 satiety=population.satiety, stress=population.stress,
+                                 influenced=population.influenced)

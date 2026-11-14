@@ -21,6 +21,7 @@ class World:
         self.events: list = []
         self.commands: list = []
         self.history: list = []
+        self.intents: list = []
         self._region_grid: dict[tuple, Region] = {}
         self._next_population_id = 1
         self._next_species_id = 1
@@ -57,7 +58,8 @@ class World:
         return species
 
     def add_population(self, species: Species, genome: Genome, region: Region, size: int,
-                       satiety: float = 1.0, stress: float = 0.0) -> Population:
+                       satiety: float = 1.0, stress: float = 0.0,
+                       influenced: bool = False) -> Population:
         population = Population(
             id=self._next_population_id,
             species=species,
@@ -67,6 +69,7 @@ class World:
             satiety=satiety,
             stress=stress,
             born_tick=self.tick,
+            influenced=influenced,
         )
         self._next_population_id += 1
         self.populations[population.id] = population
@@ -75,6 +78,9 @@ class World:
     def remove_population(self, population: Population) -> None:
         population.is_alive = False
         self.populations.pop(population.id, None)
+
+    def submit(self, intent) -> None:
+        self.intents.append(intent)
 
     def get_population(self, population_id: int) -> Optional[Population]:
         return self.populations.get(population_id)

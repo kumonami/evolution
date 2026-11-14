@@ -17,6 +17,7 @@ class WorldEventType(Enum):
     EXPANSION = 9
     MERGE = 10
     SPECIATION = 11
+    PLAYER_ACTION = 12
 
 
 @dataclass
@@ -83,3 +84,8 @@ class SpeciationPayload:
 @dataclass
 class MergePayload:
     absorbed_id: int
+
+
+@dataclass
+class PlayerPayload:
+    intent: object

@@ -7,6 +7,7 @@ from systems.execute.hunting import HuntingExecuteSystem
 from systems.execute.merge import MergeExecuteSystem
 from systems.execute.migration import MigrationExecuteSystem
 from systems.execute.mutation import MutationExecuteSystem
+from systems.execute.player import PlayerExecuteSystem
 from systems.execute.reproduction import ReproductionExecuteSystem
 from systems.execute.speciation import SpeciationExecuteSystem
 from systems.physics.history import HistorySystem
@@ -19,6 +20,7 @@ from systems.think.hunger import HungerThinkSystem
 from systems.think.hunting import HuntingThinkSystem
 from systems.think.merge import MergeThinkSystem
 from systems.think.mutation import MutationThinkSystem
+from systems.think.player import PlayerThinkSystem
 from systems.think.reproduction import ReproductionThinkSystem
 from systems.think.speciation import SpeciationThinkSystem
 from systems.think.spread import SpreadThinkSystem
@@ -34,7 +36,7 @@ class Stage:
 
 class Simulation:
     """
-    Один тик мира: physics -> стадия питания -> стадия жизни -> история.
+    Один тик мира: вмешательство игрока -> physics -> стадия питания -> стадия жизни -> история.
     Каждая стадия проходит цикл think -> decision -> execute, после чего
     события и команды очищаются. Системы не знают друг о друге и
     общаются только через события и команды.
@@ -44,6 +46,11 @@ class Simulation:
         self.world = world
         self.decision = DecisionSystem()
         self.before = [PlantGrowthSystem(), UpkeepSystem()]
+        self.intervention = Stage(
+            name="intervention",
+            think=[PlayerThinkSystem()],
+            execute=[PlayerExecuteSystem()],
+        )
         self.stages = [
             Stage(
                 name="nutrition",
@@ -65,20 +72,33 @@ class Simulation:
         ]
         self.after = [HistorySystem()]
 
+    def apply_interventions(self) -> None:
+        """
+        Применяет накопленные запросы игрока немедленно, не продвигая время.
+        Вызывается интерфейсом после действия и в начале каждого тика.
+        """
+        if self.world.intents:
+            self._run_stage(self.intervention)
+
+    def _run_stage(self, stage: Stage) -> None:
+        world = self.world
+        for system in stage.think:
+            system.process(world)
+        self.decision.process(world)
+        for system in stage.execute:
+            system.process(world)
+        world.events.clear()
+        world.commands.clear()
+        for system in stage.after:
+            system.process(world)
+
     def tick(self) -> None:
         world = self.world
+        self.apply_interventions()
         for system in self.before:
             system.process(world)
         for stage in self.stages:
-            for system in stage.think:
-                system.process(world)
-            self.decision.process(world)
-            for system in stage.execute:
-                system.process(world)
-            world.events.clear()
-            world.commands.clear()
-            for system in stage.after:
-                system.process(world)
+            self._run_stage(stage)
         for system in self.after:
             system.process(world)
         world.tick += 1

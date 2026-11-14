@@ -3,7 +3,7 @@ import config.constants as constants
 from core.world import World
 from domain.commands.commands import (
     BornCommand, EatPlantsCommand, HuntCommand, KillCommand, MergeCommand,
-    MigrateCommand, MutateCommand, ShrinkCommand, SpeciateCommand, SplitCommand,
+    MigrateCommand, MutateCommand, PlayerCommand, ShrinkCommand, SpeciateCommand, SplitCommand,
 )
 from events.world import WorldEvent, WorldEventType
 
@@ -13,6 +13,7 @@ DIRECT = {
     WorldEventType.BIRTH: lambda e: BornCommand(e.population_id, e.payload.count),
     WorldEventType.MUTATION: lambda e: MutateCommand(e.population_id, e.payload.strength),
     WorldEventType.STARVATION: lambda e: ShrinkCommand(e.population_id, e.payload.deaths, "starvation"),
+    WorldEventType.PLAYER_ACTION: lambda e: PlayerCommand(e.payload.intent),
     WorldEventType.SPECIATION: lambda e: SpeciateCommand(e.population_id),
     WorldEventType.MERGE: lambda e: MergeCommand(e.population_id, e.payload.absorbed_id),
 }

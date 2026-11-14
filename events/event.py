@@ -10,3 +10,4 @@ class EventType(Enum):
     EVOLUTION = "evolution"
     HUNTING = "hunting"
     BIRTH = "birth"
+    PLAYER = "player"
