@@ -4,6 +4,12 @@ from core.genome import Genome
 from core.region import Region
 from core.species import Species
 
+METABOLISM = {
+    constants.HERBIVORE_TYPE: constants.HERBIVORE_METABOLISM,
+    constants.OMNIVORE_TYPE: constants.OMNIVORE_METABOLISM,
+    constants.CARNIVORE_TYPE: constants.CARNIVORE_METABOLISM,
+}
+
 
 @dataclass
 class Population:
@@ -22,7 +28,7 @@ class Population:
 
     @property
     def total_need(self) -> float:
-        return self.size * self.genome.food_need
+        return self.size * self.genome.food_need * METABOLISM[self.species.type_id]
 
     @property
     def meat_share(self) -> float:

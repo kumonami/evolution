@@ -7,7 +7,8 @@ from events.world import WorldEvent, WorldEventType, HuntPayload
 class HuntingThinkSystem:
     """
     Охота хищников и всеядных на другие популяции региона.
-    Удачность определяется атакой хищника против защиты жертвы.
+    Удачность определяется атакой хищника против защиты жертвы: чем она выше,
+    тем большая доля популяции-жертвы доступна для охоты за тик.
     Численность жертв уменьшается в локальном пуле по ходу расчёта,
     чтобы несколько хищников не съели одну и ту же добычу дважды.
     """
@@ -41,9 +42,8 @@ class HuntingThinkSystem:
                 break
             value = prey.genome.prey_value
             catch = self._catch_chance(predator, prey)
-            attempts = need / value
-            limit = pool[prey.id] * constants.MAX_HUNT_FRACTION
-            killed = min(world.round_random(attempts * catch), int(limit))
+            reachable = pool[prey.id] * constants.MAX_HUNT_FRACTION * catch * 2
+            killed = min(world.round_random(need / value), int(reachable))
             if killed <= 0:
                 continue
             pool[prey.id] -= killed
