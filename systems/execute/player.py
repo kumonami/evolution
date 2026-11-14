@@ -1,5 +1,5 @@
 import config.constants as constants
-from core.genome import GENES, clamp_gene
+from core.genome import GENE_LABELS, GENES, clamp_gene
 from core.world import World
 from domain.commands.commands import PlayerCommand
 from domain.intents import AddPlants, AdjustWater, NudgeGene, ResizeRegion
@@ -67,4 +67,4 @@ class PlayerExecuteSystem:
         setattr(population.genome, intent.gene, clamp_gene(value))
         population.influenced = True
         world.logger.log(world.tick, EventType.PLAYER,
-                         f"Признак {intent.gene} популяции {population.id} сдвинут на {intent.delta:+.0f}")
+                         f"Признак «{GENE_LABELS[intent.gene]}» популяции {population.id} сдвинут на {intent.delta:+.0f}")

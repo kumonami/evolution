@@ -1,15 +1,16 @@
+from core.genome import GENE_LABELS
+
 SCREEN_X = 1280
 SCREEN_Y = 800
-HUD_HEIGHT = 40
-PANEL_WIDTH = 340
+TOPBAR_HEIGHT = 56
+PANEL_WIDTH = 360
 MAP_WIDTH = SCREEN_X - PANEL_WIDTH
-BIOME_COLORS = {1: (46, 125, 50), 2: (214, 186, 96), 3: (120, 124, 130)}
-TYPE_COLORS = {1: (66, 133, 244), 2: (156, 39, 176), 3: (219, 68, 55)}
-TYPE_NAMES = {1: "herbivore", 2: "omnivore", 3: "carnivore"}
-ORIGIN_COLORS = {"natural": (76, 175, 80), "influenced": (255, 213, 79)}
-BACKGROUND = (18, 18, 22)
-PANEL_BACKGROUND = (30, 30, 38)
-TEXT = (235, 235, 240)
-MUTED = (150, 150, 165)
-SELECTION = (255, 255, 255)
-MESSAGE_LIFETIME = 4.0
+REGION_GAP = 8
+BASE_TICK_DURATION = 0.5
+SPEEDS = (0.25, 0.5, 1, 2, 4, 8, 16)
+DEFAULT_SPEED_INDEX = 2
+
+TYPE_NAMES = {1: "травоядное", 2: "всеядное", 3: "хищник"}
+BIOME_NAMES = {1: "Лес", 2: "Пустыня", 3: "Горы"}
+GENE_NAMES = {gene: label.capitalize() for gene, label in GENE_LABELS.items()}
+ORIGIN_NAMES = {"natural": "естественный", "influenced": "под влиянием игрока"}

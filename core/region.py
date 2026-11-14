@@ -13,7 +13,7 @@ class Region:
         self.capacity = capacity
 
     def __str__(self) -> str:
-        return f"({self.coordinates[0]}, {self.coordinates[1]}) {self.biome.name}"
+        return f"регион {self.id}"
 
     @property
     def plants_growth_rate(self) -> float:

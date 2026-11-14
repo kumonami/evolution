@@ -5,6 +5,11 @@ TRAITS = ("size", "speed", "power", "fecundity", "temperature")
 ABILITIES = ("swim", "fly", "dig", "climb")
 GENES = TRAITS + ABILITIES
 MAX_GENE = 100.0
+GENE_LABELS = {
+    "size": "размер", "speed": "скорость", "power": "сила", "fecundity": "плодовитость",
+    "temperature": "температура", "swim": "плавание", "fly": "полёт", "dig": "копание",
+    "climb": "лазание",
+}
 
 
 def clamp_gene(value: float) -> float:
